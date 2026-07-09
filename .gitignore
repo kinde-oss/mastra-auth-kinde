@@ -23,3 +23,6 @@ coverage/
 
 # ---------------------------------------------------------------------
 # Add specific rules here…
+.env
+token.txt
+verify-live.mjs
