@@ -39,7 +39,7 @@ const mastra = new Mastra({
 
 The provider reads from environment variables when constructor options are omitted:
 
-```
+```dotenv
 KINDE_DOMAIN=https://yourapp.kinde.com
 KINDE_AUDIENCE=https://api.yourapp.com
 ```
@@ -59,21 +59,15 @@ KINDE_AUDIENCE=https://api.yourapp.com
 
 `MastraAuthKinde` verifies who the user is and defers what they can do to your own authorization logic.
 
-### `authenticateToken(token)`
+Mastra invokes `authenticateToken` and `authorizeUser` internally through the `server.auth` integration, so you typically do not call them directly. Their signatures are documented below for reference.
+
+### `authenticateToken(token: string, request: HonoRequest)`
 
 Verifies a Kinde JWT against Kinde's JWKS and returns the decoded user if valid. Supports both user access tokens and M2M tokens.
 
-```typescript
-const user = await auth.authenticateToken('your-jwt-token');
-```
-
-### `authorizeUser(user)`
+### `authorizeUser(user: KindeUser, request: HonoRequest)`
 
 Returns whether an authenticated user is allowed access. When `allowedOrgCodes` is set, the user's `org_code` must be in the list.
-
-```typescript
-const isAuthorized = await auth.authorizeUser(user);
-```
 
 ## Audience
 

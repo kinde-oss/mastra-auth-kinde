@@ -7,7 +7,8 @@ vi.mock('jose', () => ({
 }));
 
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { MastraAuthKinde } from '../src/index.js';
+import { MastraAuthKinde, isSystemActor } from '../src/index.js';
+import type { KindeUser } from '../src/index.js';
 
 const mockCreateRemoteJWKSet = vi.mocked(createRemoteJWKSet);
 const mockJwtVerify = vi.mocked(jwtVerify);
@@ -20,8 +21,11 @@ function validPayload(overrides: Record<string, unknown> = {}) {
     iss: DOMAIN,
     sub: 'kp:user_01234567890',
     aud: ['https://api.example.com'],
+    azp: 'client_123',
     exp: now + 3600,
     iat: now,
+    jti: 'jti_user_123',
+    scp: [],
     ...overrides,
   };
 }
@@ -76,6 +80,36 @@ describe('constructor', () => {
   it('defaults provider name to "kinde"', () => {
     const provider = new MastraAuthKinde({ domain: DOMAIN });
     expect(provider).toBeInstanceOf(MastraAuthKinde);
+  });
+
+  it('builds the JWKS URL from the domain (path is /.well-known/jwks, no .json)', () => {
+    new MastraAuthKinde({ domain: DOMAIN });
+    expect(mockCreateRemoteJWKSet).toHaveBeenCalledWith(
+      new URL(`${DOMAIN}/.well-known/jwks`),
+    );
+  });
+
+  it('normalizes a trailing slash on the domain for the JWKS URL', () => {
+    new MastraAuthKinde({ domain: 'https://example.kinde.com/' });
+    expect(mockCreateRemoteJWKSet).toHaveBeenCalledWith(
+      new URL('https://example.kinde.com/.well-known/jwks'),
+    );
+  });
+
+  it('normalizes a trailing slash on the domain for the issuer', async () => {
+    const provider = new MastraAuthKinde({ domain: 'https://example.kinde.com/' });
+    mockJwtVerify.mockResolvedValueOnce({ payload: validPayload() } as any);
+
+    await provider.authenticateToken(
+      'token',
+      {} as Parameters<MastraAuthKinde['authenticateToken']>[1],
+    );
+
+    expect(mockJwtVerify).toHaveBeenCalledWith(
+      'token',
+      'dummy-jwks-set',
+      expect.objectContaining({ issuer: 'https://example.kinde.com' }),
+    );
   });
 });
 
@@ -170,6 +204,29 @@ describe('authenticateToken', () => {
 });
 
 // ---------------------------------------------------------------------------
+// isSystemActor
+// ---------------------------------------------------------------------------
+
+describe('isSystemActor', () => {
+  it('returns true for a client_credentials token with no sub', () => {
+    expect(isSystemActor(m2mPayload())).toBe(true);
+  });
+
+  it('returns false for a client_credentials token that also has a sub', () => {
+    expect(isSystemActor(m2mPayload({ sub: 'kp:user_123' }))).toBe(false);
+  });
+
+  it('returns false for a user token (sub, no gty)', () => {
+    expect(isSystemActor(validPayload())).toBe(false);
+  });
+
+  it('returns false when neither gty nor sub is present', () => {
+    const user: KindeUser = { iss: DOMAIN, aud: [], azp: 'app', exp: 0, iat: 0, jti: 'x', scp: [] };
+    expect(isSystemActor(user)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // authorizeUser
 // ---------------------------------------------------------------------------
 
@@ -178,9 +235,8 @@ describe('authorizeUser', () => {
 
   it('returns true when user has a sub claim', () => {
     const provider = new MastraAuthKinde({ domain: DOMAIN });
-    const user = validPayload() as ReturnType<typeof validPayload> & { [k: string]: unknown };
 
-    expect(provider.authorizeUser(user as any, fakeRequest)).toBe(true);
+    expect(provider.authorizeUser(validPayload(), fakeRequest)).toBe(true);
   });
 
   it('returns false when user has no sub claim', () => {
@@ -206,12 +262,12 @@ describe('authorizeUser — M2M tokens', () => {
 
   it('returns true for an M2M token (gty contains client_credentials, no sub)', () => {
     const provider = new MastraAuthKinde({ domain: DOMAIN });
-    expect(provider.authorizeUser(m2mPayload() as any, fakeRequest)).toBe(true);
+    expect(provider.authorizeUser(m2mPayload(), fakeRequest)).toBe(true);
   });
 
   it('returns false when neither sub nor client_credentials gty is present', () => {
     const provider = new MastraAuthKinde({ domain: DOMAIN });
-    const user = {
+    const user: KindeUser = {
       iss: DOMAIN,
       aud: [],
       azp: 'app',
@@ -221,7 +277,7 @@ describe('authorizeUser — M2M tokens', () => {
       scp: [],
       gty: ['some_other_grant'],
     };
-    expect(provider.authorizeUser(user as any, fakeRequest)).toBe(false);
+    expect(provider.authorizeUser(user, fakeRequest)).toBe(false);
   });
 });
 
@@ -238,7 +294,7 @@ describe('authorizeUser — allowedOrgCodes', () => {
       allowedOrgCodes: ['org_test', 'org_other'],
     });
     const user = validPayload({ org_code: 'org_test' });
-    expect(provider.authorizeUser(user as any, fakeRequest)).toBe(true);
+    expect(provider.authorizeUser(user, fakeRequest)).toBe(true);
   });
 
   it('returns false when user org_code is not in allowedOrgCodes', () => {
@@ -247,7 +303,7 @@ describe('authorizeUser — allowedOrgCodes', () => {
       allowedOrgCodes: ['org_test'],
     });
     const user = validPayload({ org_code: 'org_different' });
-    expect(provider.authorizeUser(user as any, fakeRequest)).toBe(false);
+    expect(provider.authorizeUser(user, fakeRequest)).toBe(false);
   });
 
   it('returns false when allowedOrgCodes is set but org_code is absent', () => {
@@ -255,7 +311,7 @@ describe('authorizeUser — allowedOrgCodes', () => {
       domain: DOMAIN,
       allowedOrgCodes: ['org_test'],
     });
-    expect(provider.authorizeUser(validPayload() as any, fakeRequest)).toBe(false);
+    expect(provider.authorizeUser(validPayload(), fakeRequest)).toBe(false);
   });
 
   it('returns true for M2M token when org_code is in allowedOrgCodes', () => {
@@ -264,7 +320,7 @@ describe('authorizeUser — allowedOrgCodes', () => {
       allowedOrgCodes: ['org_test'],
     });
     // m2mPayload() includes org_code: 'org_test'
-    expect(provider.authorizeUser(m2mPayload() as any, fakeRequest)).toBe(true);
+    expect(provider.authorizeUser(m2mPayload(), fakeRequest)).toBe(true);
   });
 
   it('returns false for M2M token when org_code is not in allowedOrgCodes', () => {
@@ -273,7 +329,7 @@ describe('authorizeUser — allowedOrgCodes', () => {
       allowedOrgCodes: ['org_test'],
     });
     expect(
-      provider.authorizeUser(m2mPayload({ org_code: 'org_wrong' }) as any, fakeRequest),
+      provider.authorizeUser(m2mPayload({ org_code: 'org_wrong' }), fakeRequest),
     ).toBe(false);
   });
 });

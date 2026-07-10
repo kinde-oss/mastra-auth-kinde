@@ -67,7 +67,11 @@ export interface MastraAuthKindeOptions extends MastraAuthProviderOptions<KindeU
  * client_credentials grant (no human subject).
  */
 export function isSystemActor(user: KindeUser): boolean {
-  return Array.isArray(user?.gty) && user.gty.includes('client_credentials');
+  return (
+    Array.isArray(user?.gty) &&
+    user.gty.includes('client_credentials') &&
+    user?.sub == null
+  );
 }
 
 export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
@@ -89,10 +93,15 @@ export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
       );
     }
 
+    // A trailing slash on the domain would produce a malformed JWKS URI
+    // (`//.well-known/jwks`) and an issuer that fails to match the token's
+    // `iss` claim, so strip any trailing slashes first.
+    const normalizedDomain = domain.replace(/\/+$/, '');
+
     // Kinde JWKS path confirmed from /.well-known/openid-configuration
     // (jwks_uri field). The path has no .json extension.
-    const jwksUri = `${domain}/.well-known/jwks`;
-    this.issuer = domain;
+    const jwksUri = `${normalizedDomain}/.well-known/jwks`;
+    this.issuer = normalizedDomain;
     this.audience = audience || undefined;
     this.allowedOrgCodes = options?.allowedOrgCodes?.length ? options.allowedOrgCodes : undefined;
     this.jwks = createRemoteJWKSet(new URL(jwksUri));
@@ -127,6 +136,8 @@ export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
     }
 
     return true;
-    // TODO: add permissions / roles checks once claim shapes are confirmed
+    // Deferred: permission/role checks pending confirmation of Kinde claim shapes
+    // (org_code/permissions/roles). authorizeUser currently gates on identity +
+    // allowedOrgCodes only.
   }
 }
