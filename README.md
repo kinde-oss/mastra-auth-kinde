@@ -113,7 +113,7 @@ The core team handles publishing.
 
 ## Contributing
 
-Please refer to Kinde's [contributing guidelines](https://github.com/kinde-oss/.github/blob/main/CONTRIBUTING.md).
+Please refer to Kinde's [contributing guidelines](https://github.com/kinde-oss/.github/blob/main/.github/CONTRIBUTING.md).
 
 ## License
 
