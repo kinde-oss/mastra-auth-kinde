@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "description": "Kinde authentication provider for the Mastra AI agent framework",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/index.cjs",
+  "types": "dist/index.d.cts",
   "exports": {
     ".": {
       "import": {
@@ -12,7 +12,7 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.d.ts",
+        "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
     },
@@ -36,11 +36,6 @@
   "peerDependencies": {
     "@mastra/core": ">=1.32.0-0 <2.0.0-0",
     "hono": "^4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "hono": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

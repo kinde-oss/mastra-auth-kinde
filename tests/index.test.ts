@@ -66,6 +66,19 @@ describe('constructor', () => {
     );
   });
 
+  it('throws when the domain is missing the https:// scheme', () => {
+    expect(() => new MastraAuthKinde({ domain: 'example.kinde.com' })).toThrow(
+      'Kinde domain must include the https:// scheme',
+    );
+  });
+
+  it('throws when the domain from KINDE_DOMAIN is missing the https:// scheme', () => {
+    process.env['KINDE_DOMAIN'] = 'http://example.kinde.com';
+    expect(() => new MastraAuthKinde()).toThrow(
+      'Kinde domain must include the https:// scheme',
+    );
+  });
+
   it('reads domain from KINDE_DOMAIN env var', () => {
     process.env['KINDE_DOMAIN'] = DOMAIN;
     expect(() => new MastraAuthKinde()).not.toThrow();
@@ -224,6 +237,14 @@ describe('isSystemActor', () => {
     const user: KindeUser = { iss: DOMAIN, aud: [], azp: 'app', exp: 0, iat: 0, jti: 'x', scp: [] };
     expect(isSystemActor(user)).toBe(false);
   });
+
+  it('returns false for null', () => {
+    expect(isSystemActor(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isSystemActor(undefined)).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -246,10 +267,16 @@ describe('authorizeUser', () => {
     expect(provider.authorizeUser(user as any, fakeRequest)).toBe(false);
   });
 
-  it('returns false when user is null-ish', () => {
+  it('returns false when user is null', () => {
     const provider = new MastraAuthKinde({ domain: DOMAIN });
 
-    expect(provider.authorizeUser(null as any, fakeRequest)).toBe(false);
+    expect(provider.authorizeUser(null, fakeRequest)).toBe(false);
+  });
+
+  it('returns false when user is undefined', () => {
+    const provider = new MastraAuthKinde({ domain: DOMAIN });
+
+    expect(provider.authorizeUser(undefined, fakeRequest)).toBe(false);
   });
 });
 

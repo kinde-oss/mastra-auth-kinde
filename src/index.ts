@@ -66,7 +66,7 @@ export interface MastraAuthKindeOptions extends MastraAuthProviderOptions<KindeU
  * Returns true when the token was issued via a machine-to-machine
  * client_credentials grant (no human subject).
  */
-export function isSystemActor(user: KindeUser): boolean {
+export function isSystemActor(user: KindeUser | null | undefined): boolean {
   return (
     Array.isArray(user?.gty) &&
     user.gty.includes('client_credentials') &&
@@ -90,6 +90,12 @@ export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
     if (!domain) {
       throw new Error(
         'Kinde domain is required. Provide it via options.domain or the KINDE_DOMAIN environment variable.',
+      );
+    }
+
+    if (!domain.startsWith('https://')) {
+      throw new Error(
+        `Kinde domain must include the https:// scheme, received "${domain}".`,
       );
     }
 
@@ -120,13 +126,20 @@ export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
         ...(this.audience ? { audience: this.audience } : {}),
       });
       return payload as unknown as KindeUser;
-    } catch {
+    } catch (err) {
+      // Never log the token itself — only the error message, and only when
+      // debug logging is explicitly enabled.
+      if (process.env['KINDE_DEBUG'] === 'true') {
+        console.debug('[mastra-auth-kinde] token verification failed:', (err as Error).message);
+      }
       return null;
     }
   }
 
-  authorizeUser(user: KindeUser, _request: HonoRequest): boolean {
-    const isUser = !!user?.sub;
+  authorizeUser(user: KindeUser | null | undefined, _request: HonoRequest): boolean {
+    if (!user) return false;
+
+    const isUser = !!user.sub;
     const isM2M = isSystemActor(user);
 
     if (!isUser && !isM2M) return false;

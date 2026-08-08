@@ -8,6 +8,10 @@ A [Kinde](https://kinde.com) authentication provider for the [Mastra](https://ma
 - M2M / system-actor support for background workflows, cron jobs, and agent pipelines
 - Edge-native via `jose`, no `nodejs_compat` flag required on Cloudflare Workers
 
+## Scope
+
+This provider handles API bearer-token authentication for Mastra's server routes. It does not provide the Mastra Studio SSO login UI.
+
 ## Installation
 
 ```sh
@@ -54,6 +58,7 @@ KINDE_AUDIENCE=https://api.yourapp.com
 | `audience` | `KINDE_AUDIENCE` | No | API audience to enforce on the token's `aud` claim |
 | `allowedOrgCodes` | — | No | Restrict access to specific Kinde organizations |
 | `name` | — | No | Override the provider name (default: `"kinde"`) |
+| — | `KINDE_DEBUG` | No | Set to `true` to log token verification failures (error message only) via `console.debug` |
 
 ## Methods
 
@@ -65,9 +70,9 @@ Mastra invokes `authenticateToken` and `authorizeUser` internally through the `s
 
 Verifies a Kinde JWT against Kinde's JWKS and returns the decoded user if valid. Supports both user access tokens and M2M tokens.
 
-### `authorizeUser(user: KindeUser, request: HonoRequest)`
+### `authorizeUser(user: KindeUser | null | undefined, request: HonoRequest)`
 
-Returns whether an authenticated user is allowed access. When `allowedOrgCodes` is set, the user's `org_code` must be in the list.
+Returns whether an authenticated user is allowed access. A missing user is denied. When `allowedOrgCodes` is set, the user's `org_code` must be in the list.
 
 ## Audience
 
@@ -83,6 +88,8 @@ const auth = new MastraAuthKinde({
   allowedOrgCodes: ['org_abc123', 'org_def456'],
 });
 ```
+
+When `allowedOrgCodes` is set, any token whose `org_code` is missing or not in the list is denied.
 
 ## M2M / system-actor support
 
