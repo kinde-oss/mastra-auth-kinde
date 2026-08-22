@@ -26,3 +26,4 @@ coverage/
 .env
 token.txt
 verify-live.mjs
+RBAC-IMPLEMENTATION-PLAN.md
