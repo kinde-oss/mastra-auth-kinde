@@ -127,6 +127,116 @@ describe('constructor', () => {
 });
 
 // ---------------------------------------------------------------------------
+// constructor — audience / allowedOrgCodes validation
+// ---------------------------------------------------------------------------
+
+describe('constructor — audience validation', () => {
+  const AUDIENCE_ERROR =
+    'Kinde audience, when provided, must be a non-empty string. Omit the option to disable the audience check.';
+
+  it('throws when audience is an explicit empty string', () => {
+    expect(() => new MastraAuthKinde({ domain: DOMAIN, audience: '' })).toThrow(
+      AUDIENCE_ERROR,
+    );
+  });
+
+  it('throws when audience is whitespace only', () => {
+    expect(() => new MastraAuthKinde({ domain: DOMAIN, audience: '   ' })).toThrow(
+      AUDIENCE_ERROR,
+    );
+  });
+
+  it('throws when audience is an empty string even though KINDE_AUDIENCE is set', () => {
+    process.env['KINDE_AUDIENCE'] = 'https://env-api.example.com';
+    expect(() => new MastraAuthKinde({ domain: DOMAIN, audience: '' })).toThrow(
+      AUDIENCE_ERROR,
+    );
+  });
+
+  it('treats a blank KINDE_AUDIENCE env var as unset (check off, no throw)', async () => {
+    process.env['KINDE_AUDIENCE'] = '   ';
+    const provider = new MastraAuthKinde({ domain: DOMAIN });
+    mockJwtVerify.mockResolvedValueOnce({ payload: validPayload() } as any);
+
+    await provider.authenticateToken(
+      'token',
+      {} as Parameters<MastraAuthKinde['authenticateToken']>[1],
+    );
+
+    const callOptions = mockJwtVerify.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(callOptions).not.toHaveProperty('audience');
+  });
+
+  it('still enforces a real audience through authenticateToken', async () => {
+    const provider = new MastraAuthKinde({
+      domain: DOMAIN,
+      audience: 'https://api.example.com',
+    });
+    mockJwtVerify.mockResolvedValueOnce({ payload: validPayload() } as any);
+
+    await provider.authenticateToken(
+      'token',
+      {} as Parameters<MastraAuthKinde['authenticateToken']>[1],
+    );
+
+    expect(mockJwtVerify).toHaveBeenCalledWith(
+      'token',
+      'dummy-jwks-set',
+      expect.objectContaining({ audience: 'https://api.example.com' }),
+    );
+  });
+});
+
+describe('constructor — allowedOrgCodes validation', () => {
+  const ORG_CODES_ERROR =
+    'allowedOrgCodes, when provided, must contain at least one org code. Omit the option to disable the org check.';
+  const fakeRequest = {} as Parameters<MastraAuthKinde['authorizeUser']>[1];
+
+  it('throws when allowedOrgCodes is an explicit empty array', () => {
+    expect(
+      () => new MastraAuthKinde({ domain: DOMAIN, allowedOrgCodes: [] }),
+    ).toThrow(ORG_CODES_ERROR);
+  });
+
+  it('still gates authorizeUser with a real allowedOrgCodes list', () => {
+    const provider = new MastraAuthKinde({
+      domain: DOMAIN,
+      allowedOrgCodes: ['org_allowed'],
+    });
+
+    expect(
+      provider.authorizeUser(validPayload({ org_code: 'org_allowed' }), fakeRequest),
+    ).toBe(true);
+    expect(
+      provider.authorizeUser(validPayload({ org_code: 'org_denied' }), fakeRequest),
+    ).toBe(false);
+    expect(provider.authorizeUser(validPayload(), fakeRequest)).toBe(false);
+  });
+});
+
+describe('constructor — both options omitted', () => {
+  const fakeRequest = {} as Parameters<MastraAuthKinde['authorizeUser']>[1];
+
+  it('leaves the audience and org checks off', async () => {
+    const provider = new MastraAuthKinde({ domain: DOMAIN });
+    mockJwtVerify.mockResolvedValueOnce({ payload: validPayload() } as any);
+
+    await provider.authenticateToken(
+      'token',
+      {} as Parameters<MastraAuthKinde['authenticateToken']>[1],
+    );
+
+    const callOptions = mockJwtVerify.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(callOptions).not.toHaveProperty('audience');
+    // No org gate: a token with any org_code, or none at all, is authorized.
+    expect(
+      provider.authorizeUser(validPayload({ org_code: 'org_anything' }), fakeRequest),
+    ).toBe(true);
+    expect(provider.authorizeUser(validPayload(), fakeRequest)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // authenticateToken
 // ---------------------------------------------------------------------------
 

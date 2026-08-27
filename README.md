@@ -55,8 +55,8 @@ KINDE_AUDIENCE=https://api.yourapp.com
 | Option | Env var | Required | Description |
 |---|---|---|---|
 | `domain` | `KINDE_DOMAIN` | Yes | Your Kinde tenant URL, e.g. `https://yourapp.kinde.com` |
-| `audience` | `KINDE_AUDIENCE` | No | API audience to enforce on the token's `aud` claim |
-| `allowedOrgCodes` | — | No | Restrict access to specific Kinde organizations |
+| `audience` | `KINDE_AUDIENCE` | No | API audience to enforce on the token's `aud` claim. Omit to disable the audience check; an empty string is rejected |
+| `allowedOrgCodes` | — | No | Restrict access to specific Kinde organizations. Omit to disable the org check; an empty array is rejected |
 | `name` | — | No | Override the provider name (default: `"kinde"`) |
 | — | `KINDE_DEBUG` | No | Set to `true` to log token verification failures (error message only) via `console.debug` |
 
@@ -78,6 +78,14 @@ Returns whether an authenticated user is allowed access. A missing user is denie
 
 Only set `audience` once you have registered and bound an API audience in the Kinde dashboard. A default Kinde token carries an empty `aud` array, so any token with an empty `aud` will fail the audience check if this option is set.
 
+Omit the option (and leave `KINDE_AUDIENCE` unset or blank) to disable the audience check. Passing an empty string throws at construction rather than silently disabling the check:
+
+```typescript
+new MastraAuthKinde({ domain: 'https://yourapp.kinde.com', audience: '' });
+// Error: Kinde audience, when provided, must be a non-empty string.
+// Omit the option to disable the audience check.
+```
+
 ## Organization-based access control
 
 Pass `allowedOrgCodes` to restrict access to specific Kinde organizations. The check applies to both user tokens and M2M tokens that carry an `org_code` claim:
@@ -90,6 +98,14 @@ const auth = new MastraAuthKinde({
 ```
 
 When `allowedOrgCodes` is set, any token whose `org_code` is missing or not in the list is denied.
+
+Omit the option to disable the org check. Passing an empty array throws at construction rather than silently disabling the check:
+
+```typescript
+new MastraAuthKinde({ domain: 'https://yourapp.kinde.com', allowedOrgCodes: [] });
+// Error: allowedOrgCodes, when provided, must contain at least one org code.
+// Omit the option to disable the org check.
+```
 
 ## M2M / system-actor support
 

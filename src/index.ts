@@ -53,11 +53,16 @@ export interface MastraAuthKindeOptions extends MastraAuthProviderOptions<KindeU
    * The API audience registered in your Kinde dashboard.
    * Falls back to process.env.KINDE_AUDIENCE.
    * When set, every token's aud claim must include this value.
+   * Omit the option (and leave KINDE_AUDIENCE unset or blank) to disable the
+   * audience check; passing an empty string is rejected as a config error
+   * rather than silently disabling the check.
    */
   audience?: string;
   /**
-   * When set and non-empty, only tokens whose org_code is in this list are
-   * authorized. Applies to both user and M2M tokens.
+   * Only tokens whose org_code is in this list are authorized. Applies to both
+   * user and M2M tokens.
+   * Omit the option to disable the org check; passing an empty array is
+   * rejected as a config error rather than silently disabling the check.
    */
   allowedOrgCodes?: string[];
 }
@@ -85,7 +90,6 @@ export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
     super({ name: options?.name ?? 'kinde' });
 
     const domain = options?.domain ?? process.env['KINDE_DOMAIN'];
-    const audience = options?.audience ?? process.env['KINDE_AUDIENCE'];
 
     if (!domain) {
       throw new Error(
@@ -99,6 +103,21 @@ export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
       );
     }
 
+    // An explicitly provided but empty audience/allowedOrgCodes is a config
+    // mistake, not a request to turn the check off — collapsing it to
+    // "disabled" would silently fail open. Omitting the option disables it.
+    if (options?.audience !== undefined && options.audience.trim() === '') {
+      throw new Error(
+        'Kinde audience, when provided, must be a non-empty string. Omit the option to disable the audience check.',
+      );
+    }
+
+    if (options?.allowedOrgCodes !== undefined && options.allowedOrgCodes.length === 0) {
+      throw new Error(
+        'allowedOrgCodes, when provided, must contain at least one org code. Omit the option to disable the org check.',
+      );
+    }
+
     // A trailing slash on the domain would produce a malformed JWKS URI
     // (`//.well-known/jwks`) and an issuer that fails to match the token's
     // `iss` claim, so strip any trailing slashes first.
@@ -108,8 +127,10 @@ export class MastraAuthKinde extends MastraAuthProvider<KindeUser> {
     // (jwks_uri field). The path has no .json extension.
     const jwksUri = `${normalizedDomain}/.well-known/jwks`;
     this.issuer = normalizedDomain;
-    this.audience = audience || undefined;
-    this.allowedOrgCodes = options?.allowedOrgCodes?.length ? options.allowedOrgCodes : undefined;
+    // A blank KINDE_AUDIENCE env var counts as unset (check off), not an error.
+    const audience = options?.audience ?? process.env['KINDE_AUDIENCE'];
+    this.audience = audience && audience.trim() !== '' ? audience : undefined;
+    this.allowedOrgCodes = options?.allowedOrgCodes;
     this.jwks = createRemoteJWKSet(new URL(jwksUri));
 
     this.registerOptions(options);
