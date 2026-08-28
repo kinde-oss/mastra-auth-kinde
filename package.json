@@ -27,6 +27,7 @@
     "build:watch": "tsup --watch --silent --config tsup.config.ts",
     "test": "vitest run",
     "lint": "eslint .",
+    "release": "release-it",
     "prepare": "npm run build"
   },
   "license": "MIT",
@@ -44,6 +45,7 @@
     "@vitest/coverage-v8": "^3.0.0",
     "eslint": "^10.6.0",
     "hono": "^4.12.8",
+    "release-it": "^20.2.1",
     "tsup": "^8.5.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.63.0",
